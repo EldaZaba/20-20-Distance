@@ -37,8 +37,9 @@ const playTone = () => {
 
 const OverlayTimer = () => {
   const { settings, updateSettings } = useSettings();
-  const { remainingSeconds } = useTimer();
+  const { remainingSeconds, paused: timerPaused } = useTimer();
   const [active, setActive] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(OVERLAY_SECONDS);
   const [motionDetected, setMotionDetected] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'active' | 'denied'>('idle');
@@ -69,6 +70,14 @@ const OverlayTimer = () => {
       // backend may be busy
     }
   }, []);
+
+  const handleToggleTimerPause = useCallback(async () => {
+    try {
+      await invoke(timerPaused ? 'resume_timer' : 'pause_timer');
+    } catch {
+      // backend may be busy
+    }
+  }, [timerPaused]);
 
   const stopCamera = useCallback(() => {
     if (motionIntervalRef.current) {
@@ -209,6 +218,7 @@ const OverlayTimer = () => {
   const completeSession = useCallback(async () => {
     stopCamera();
     setActive(false);
+    setPaused(false);
 
     try {
       await invoke('session_complete');
@@ -223,21 +233,25 @@ const OverlayTimer = () => {
     }
   }, [stopCamera]);
 
+  const togglePause = useCallback(() => {
+    setPaused((current) => !current);
+  }, []);
+
   useEffect(() => {
-    if (!active) return;
+    if (!active || paused) return;
 
     const interval = window.setInterval(() => {
       setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [active]);
+  }, [active, paused]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || paused) return;
     startCamera();
     return () => stopCamera();
-  }, [active, startCamera, stopCamera]);
+  }, [active, paused, startCamera, stopCamera]);
 
   useEffect(() => {
     return () => stopActiveAudio();
@@ -252,6 +266,7 @@ const OverlayTimer = () => {
   useEffect(() => {
     const unlistenShow = listen('overlay:show', () => {
       setActive(true);
+      setPaused(false);
       setSecondsLeft(OVERLAY_SECONDS);
       setMotionDetected(false);
       setCameraStatus('idle');
@@ -259,6 +274,7 @@ const OverlayTimer = () => {
 
     const unlistenHide = listen('overlay:hide', () => {
       setActive(false);
+      setPaused(false);
       stopCamera();
     });
 
@@ -324,6 +340,19 @@ const OverlayTimer = () => {
               Reset Countdown
             </Button>
           </div>
+          <div className="mt-3">
+            <Button
+              variant={timerPaused ? 'contained' : 'outlined'}
+              color={timerPaused ? 'success' : 'warning'}
+              size="small"
+              onClick={() => void handleToggleTimerPause()}
+            >
+              {timerPaused ? 'Resume Timer' : 'Pause Timer'}
+            </Button>
+          </div>
+          <div className="mt-2 text-xs text-white/40">
+            Timer is currently {timerPaused ? 'paused' : 'running'}.
+          </div>
         </div>
         <video ref={videoRef} className="hidden" />
       </div>
@@ -353,18 +382,24 @@ const OverlayTimer = () => {
           {motionDetected && (
             <Chip label="Movement detected" color="success" size="small" />
           )}
+          {paused && (
+            <Chip label="Paused" color="default" size="small" />
+          )}
         </div>
 
-        <div className="mt-8 flex flex-col items-center gap-3">
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <Button variant="outlined" color="inherit" size="large" onClick={togglePause}>
+            {paused ? 'Resume' : 'Pause'}
+          </Button>
           <Button
             variant="contained"
-            color="primary"
+            color="error"
             size="large"
             onClick={() => void completeSession()}
           >
-            Done
+            Stop
           </Button>
-          <span className="text-sm text-white/60">Press ESC to close quickly</span>
+          <span className="text-sm text-white/60">Press ESC to stop quickly</span>
         </div>
 
         <video ref={videoRef} className="hidden" />

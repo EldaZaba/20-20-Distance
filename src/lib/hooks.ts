@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Settings,
   Stats,
@@ -57,24 +58,44 @@ export const useStats = () => {
 type TimerTick = {
   remainingSeconds: number;
   totalSeconds: number;
+  paused?: boolean;
+};
+
+type TimerState = {
+  paused: boolean;
 };
 
 export const useTimer = () => {
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [totalSeconds, setTotalSeconds] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
+    invoke<boolean>('is_timer_paused')
+      .then((value) => setPaused(value))
+      .catch(() => undefined);
+
     const unlistenTick = listen<TimerTick>('timer:tick', (event) => {
       const payload = event.payload;
       if (!payload) return;
       setRemainingSeconds(payload.remainingSeconds);
       setTotalSeconds(payload.totalSeconds);
+      if (typeof payload.paused === 'boolean') {
+        setPaused(payload.paused);
+      }
+    });
+
+    const unlistenState = listen<TimerState>('timer:state', (event) => {
+      const payload = event.payload;
+      if (!payload) return;
+      setPaused(Boolean(payload.paused));
     });
 
     return () => {
       void unlistenTick.then((fn) => fn());
+      void unlistenState.then((fn) => fn());
     };
   }, []);
 
-  return { remainingSeconds, totalSeconds };
+  return { remainingSeconds, totalSeconds, paused };
 };

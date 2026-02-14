@@ -30,7 +30,7 @@ const INTERVALS = [1, 10, 20, 30, 45, 60];
 const Settings = () => {
   const { settings, updateSettings } = useSettings();
   const { stats, refreshStats } = useStats();
-  const { remainingSeconds, totalSeconds } = useTimer();
+  const { remainingSeconds, totalSeconds, paused } = useTimer();
   const [audioDir, setAudioDir] = useState<string>('');
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | 'unsupported'
@@ -83,6 +83,14 @@ const Settings = () => {
   const handleResetTimer = async () => {
     try {
       await invoke('reset_timer');
+    } catch {
+      // backend may be busy
+    }
+  };
+
+  const handleToggleTimer = async () => {
+    try {
+      await invoke(paused ? 'resume_timer' : 'pause_timer');
     } catch {
       // backend may be busy
     }
@@ -147,10 +155,23 @@ const Settings = () => {
                 <LinearProgress variant="determinate" value={progress} />
               </div>
             )}
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button variant="outlined" size="small" onClick={handleResetTimer}>
                 Reset Countdown
               </Button>
+              <Button
+                variant="contained"
+                size="small"
+                color={paused ? 'success' : 'warning'}
+                onClick={handleToggleTimer}
+              >
+                {paused ? 'Resume Timer' : 'Pause Timer'}
+              </Button>
+              <Chip
+                size="small"
+                color={paused ? 'warning' : 'success'}
+                label={paused ? 'Paused' : 'Running'}
+              />
             </div>
             <Typography variant="caption" color="text.secondary" display="block" className="mt-2">
               Time remaining until your next 20-second break.

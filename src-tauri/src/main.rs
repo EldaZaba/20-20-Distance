@@ -1,8 +1,8 @@
 ﻿#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, Submenu};
@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 struct AppState {
   interval_minutes: AtomicU64,
   reset_seq: AtomicU64,
+  paused: AtomicBool,
 }
 
 // Interval in minutes for the background timer.
@@ -26,20 +27,43 @@ fn set_interval(minutes: u64, state: tauri::State<AppState>) {
 #[tauri::command]
 fn reset_timer(state: tauri::State<AppState>, app: AppHandle) {
   state.reset_seq.fetch_add(1, Ordering::SeqCst);
+  state.paused.store(false, Ordering::SeqCst);
   hide_overlay(&app);
 
   let minutes = state.interval_minutes.load(Ordering::SeqCst);
   let total_seconds = minutes.saturating_mul(60);
   let _ = app.emit(
     "timer:tick",
-    serde_json::json!({ "remainingSeconds": total_seconds, "totalSeconds": total_seconds }),
+    serde_json::json!({
+      "remainingSeconds": total_seconds,
+      "totalSeconds": total_seconds,
+      "paused": false
+    }),
   );
+  let _ = app.emit("timer:state", serde_json::json!({ "paused": false }));
 }
 
 // Called by frontend when a break session is complete.
 #[tauri::command]
 fn session_complete(app: AppHandle) {
   hide_overlay(&app);
+}
+
+#[tauri::command]
+fn pause_timer(state: tauri::State<AppState>, app: AppHandle) {
+  state.paused.store(true, Ordering::SeqCst);
+  let _ = app.emit("timer:state", serde_json::json!({ "paused": true }));
+}
+
+#[tauri::command]
+fn resume_timer(state: tauri::State<AppState>, app: AppHandle) {
+  state.paused.store(false, Ordering::SeqCst);
+  let _ = app.emit("timer:state", serde_json::json!({ "paused": false }));
+}
+
+#[tauri::command]
+fn is_timer_paused(state: tauri::State<AppState>) -> bool {
+  state.paused.load(Ordering::SeqCst)
 }
 
 fn find_project_root() -> Option<PathBuf> {
@@ -230,41 +254,70 @@ fn set_interval_from_tray(app: &AppHandle, minutes: u64) {
 // Main loop: wait for interval and emit reminder events.
 fn start_timer(app: AppHandle) {
   std::thread::spawn(move || loop {
-    let last_reset = app.state::<AppState>().reset_seq.load(Ordering::SeqCst);
-    let minutes = app.state::<AppState>().interval_minutes.load(Ordering::SeqCst);
+    let state = app.state::<AppState>();
+    let last_reset = state.reset_seq.load(Ordering::SeqCst);
+    let minutes = state.interval_minutes.load(Ordering::SeqCst);
     let total_seconds = minutes.saturating_mul(60);
-    let deadline = Instant::now() + Duration::from_secs(total_seconds);
+    let mut remaining = total_seconds;
     let mut reset_triggered = false;
 
     loop {
-      let current_reset = app.state::<AppState>().reset_seq.load(Ordering::SeqCst);
+      let current_reset = state.reset_seq.load(Ordering::SeqCst);
       if current_reset != last_reset {
         reset_triggered = true;
         break;
       }
 
-      let now = Instant::now();
-      if now >= deadline {
+      let paused = state.paused.load(Ordering::SeqCst);
+      if paused {
+        let _ = app.emit(
+          "timer:tick",
+          serde_json::json!({
+            "remainingSeconds": remaining,
+            "totalSeconds": total_seconds,
+            "paused": true
+          }),
+        );
+        std::thread::sleep(Duration::from_millis(250));
+        continue;
+      }
+
+      if remaining == 0 {
         break;
       }
 
-      let remaining = deadline.saturating_duration_since(now).as_secs();
       let _ = app.emit(
         "timer:tick",
-        serde_json::json!({ "remainingSeconds": remaining, "totalSeconds": total_seconds }),
+        serde_json::json!({
+          "remainingSeconds": remaining,
+          "totalSeconds": total_seconds,
+          "paused": false
+        }),
       );
 
       std::thread::sleep(Duration::from_secs(1));
+
+      let current_reset = state.reset_seq.load(Ordering::SeqCst);
+      if current_reset != last_reset {
+        reset_triggered = true;
+        break;
+      }
+
+      if !state.paused.load(Ordering::SeqCst) {
+        remaining = remaining.saturating_sub(1);
+      }
     }
 
     if reset_triggered {
       continue;
     }
 
+    state.paused.store(false, Ordering::SeqCst);
     let _ = app.emit(
       "timer:tick",
-      serde_json::json!({ "remainingSeconds": 0, "totalSeconds": total_seconds }),
+      serde_json::json!({ "remainingSeconds": 0, "totalSeconds": total_seconds, "paused": false }),
     );
+    let _ = app.emit("timer:state", serde_json::json!({ "paused": false }));
     let _ = app.emit("timer:elapsed", ());
   });
 }
@@ -286,6 +339,7 @@ fn main() {
       app.manage(AppState {
         interval_minutes: AtomicU64::new(20),
         reset_seq: AtomicU64::new(0),
+        paused: AtomicBool::new(false),
       });
 
       build_tray(app)?;
@@ -312,6 +366,9 @@ fn main() {
       set_interval,
       reset_timer,
       session_complete,
+      pause_timer,
+      resume_timer,
+      is_timer_paused,
       get_audio_dir,
       get_audio_file
     ])
