@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-schema.json",
+  "productName": "20-20 Distance",
+  "version": "0.1.0",
+  "identifier": "com.vzdalenost.twenty20",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$RESOURCE/sounds/*",
+          "$APPDATA/sounds/*"
+        ]
+      }
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/tray.png",
+      "tooltip": "20-20 Distance",
+      "showMenuOnLeftClick": true,
+      "iconAsTemplate": true
+    },
+    "windows": [
+      {
+        "label": "overlay",
+        "title": "20-20 Distance",
+        "url": "index.html",
+        "visible": false,
+        "fullscreen": true,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
+      },
+      {
+        "label": "settings",
+        "title": "Settings - 20-20 Distance",
+        "url": "index.html",
+        "visible": false,
+        "width": 560,
+        "height": 760,
+        "resizable": true,
+        "decorations": true,
+        "skipTaskbar": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/tray.png"
+    ]
+  }
+}

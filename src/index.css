@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg-main: #080a11;
+  --bg-card: rgba(20, 24, 34, 0.78);
+  --line-soft: rgba(255, 255, 255, 0.12);
+  --glow-cyan: rgba(85, 224, 252, 0.38);
+  --glow-amber: rgba(252, 177, 61, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Space Grotesk', system-ui, -apple-system, Segoe UI, sans-serif;
+  background:
+    radial-gradient(1000px 550px at 16% -5%, rgba(85, 224, 252, 0.2) 0%, transparent 60%),
+    radial-gradient(700px 450px at 90% 5%, rgba(252, 177, 61, 0.18) 0%, transparent 60%),
+    linear-gradient(165deg, #0b0e17 0%, var(--bg-main) 60%);
+  letter-spacing: 0.2px;
+  color: #f6f9ff;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.app-bg-orb {
+  pointer-events: none;
+  position: absolute;
+  width: 32rem;
+  height: 32rem;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.45;
+  animation: drift 10s ease-in-out infinite alternate;
+}
+
+.app-bg-orb-left {
+  left: -14rem;
+  top: -12rem;
+  background: var(--glow-cyan);
+}
+
+.app-bg-orb-right {
+  right: -12rem;
+  top: 22%;
+  background: var(--glow-amber);
+  animation-delay: 1.2s;
+}
+
+.glass-card {
+  border: 1px solid var(--line-soft);
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-panel {
+  box-shadow:
+    0 0 80px rgba(85, 224, 252, 0.24),
+    0 30px 80px rgba(0, 0, 0, 0.58);
+  animation: rise-in 180ms ease-out;
+}
+
+.overlay-glow {
+  box-shadow: 0 0 80px rgba(123, 223, 246, 0.35);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translateY(0) translateX(0) scale(1);
+  }
+
+  to {
+    transform: translateY(-14px) translateX(8px) scale(1.05);
+  }
+}
