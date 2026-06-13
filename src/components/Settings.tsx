@@ -279,7 +279,7 @@ const Settings = () => {
               PC Time Limit
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Dostaneš upozornění se zvukem, když jsi na PC stanovenou dobu.
+              Receive a sound notification when you've been on the PC for the set duration.
             </Typography>
             <FormControlLabel
               control={

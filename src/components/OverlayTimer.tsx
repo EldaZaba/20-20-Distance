@@ -216,7 +216,7 @@ const OverlayTimer = () => {
         permissionGranted = permission === 'granted';
       }
       if (permissionGranted) {
-        sendNotification({ title: 'PC Time Limit', body: 'Vypršel tvůj časový limit na PC.' });
+        sendNotification({ title: 'PC Time Limit', body: 'Your PC time limit has been reached.' });
       }
     } catch {
       // ignore
