@@ -1,4 +1,4 @@
-import { ChangeEvent, MouseEvent, useEffect, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, MouseEvent, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
   Button,
   Stack,
   Switch,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography
@@ -35,6 +36,10 @@ const Settings = () => {
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | 'unsupported'
   >('default');
+  const [customInterval, setCustomInterval] = useState('');
+  const [timeLimitInput, setTimeLimitInput] = useState(
+    settings.timeLimitMinutes > 0 ? String(settings.timeLimitMinutes) : '120'
+  );
 
   useEffect(() => {
     const unlisten = listen('settings:open', () => {
@@ -64,15 +69,53 @@ const Settings = () => {
       });
   }, []);
 
-  const handleIntervalChange = async (_: MouseEvent<HTMLElement>, value: number | null) => {
-    if (!value) return;
-    const next = updateSettings({ intervalMinutes: value });
+  const applyInterval = async (minutes: number) => {
+    if (!minutes || minutes < 1) return;
+    const next = updateSettings({ intervalMinutes: minutes });
     void emit('settings:update', { intervalMinutes: next.intervalMinutes });
     try {
-      await invoke('set_interval', { minutes: value });
+      await invoke('set_interval', { minutes });
     } catch {
       // backend may be busy
     }
+  };
+
+  const handleIntervalChange = async (_: MouseEvent<HTMLElement>, value: number | null) => {
+    if (!value) return;
+    await applyInterval(value);
+    setCustomInterval('');
+  };
+
+  const handleCustomIntervalApply = async () => {
+    const value = parseInt(customInterval, 10);
+    if (isNaN(value) || value < 1) return;
+    await applyInterval(value);
+    setCustomInterval('');
+  };
+
+  const handleCustomIntervalKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') void handleCustomIntervalApply();
+  };
+
+  const applyTimeLimitInput = () => {
+    const v = parseInt(timeLimitInput, 10);
+    if (v >= 1) {
+      const next = updateSettings({ timeLimitMinutes: v });
+      void emit('settings:update', { timeLimitMinutes: next.timeLimitMinutes });
+    } else {
+      setTimeLimitInput(String(settings.timeLimitMinutes || 120));
+    }
+  };
+
+  const handleTimeLimitKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') applyTimeLimitInput();
+  };
+
+  const handleTimeLimitToggle = (_: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+    const minutes = checked ? (parseInt(timeLimitInput, 10) || 120) : 0;
+    if (checked && !timeLimitInput) setTimeLimitInput('120');
+    const next = updateSettings({ timeLimitMinutes: minutes });
+    void emit('settings:update', { timeLimitMinutes: next.timeLimitMinutes });
   };
 
   const handleSoundChange = (_: ChangeEvent<HTMLInputElement>, checked: boolean) => {
@@ -197,8 +240,23 @@ const Settings = () => {
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
+            <div className="mt-3 flex items-center gap-2">
+              <TextField
+                size="small"
+                label="Custom (min)"
+                type="number"
+                value={customInterval}
+                onChange={(e) => setCustomInterval(e.target.value)}
+                onKeyDown={handleCustomIntervalKeyDown}
+                inputProps={{ min: 1, max: 480 }}
+                sx={{ width: 140 }}
+              />
+              <Button size="small" variant="outlined" onClick={() => void handleCustomIntervalApply()}>
+                Set
+              </Button>
+            </div>
             <Typography variant="caption" color="text.secondary" display="block" className="mt-2">
-              Changes apply after the current cycle ends.
+              Current: {settings.intervalMinutes} min — changes apply after the current cycle ends.
             </Typography>
           </CardContent>
         </Card>
@@ -212,6 +270,47 @@ const Settings = () => {
               control={<Switch checked={settings.soundEnabled} onChange={handleSoundChange} />}
               label={settings.soundEnabled ? 'Sound enabled' : 'Muted'}
             />
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card">
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              PC Time Limit
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Dostaneš upozornění se zvukem, když jsi na PC stanovenou dobu.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={settings.timeLimitMinutes > 0}
+                  onChange={handleTimeLimitToggle}
+                />
+              }
+              label={settings.timeLimitMinutes > 0 ? 'Enabled' : 'Disabled'}
+              className="mt-2"
+            />
+            {settings.timeLimitMinutes > 0 && (
+              <div className="mt-3 flex items-center gap-3">
+                <TextField
+                  size="small"
+                  label="Minutes"
+                  type="number"
+                  value={timeLimitInput}
+                  onChange={(e) => setTimeLimitInput(e.target.value)}
+                  onBlur={applyTimeLimitInput}
+                  onKeyDown={handleTimeLimitKeyDown}
+                  inputProps={{ min: 1, max: 1440 }}
+                  sx={{ width: 120 }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {settings.timeLimitMinutes >= 60
+                    ? `${Math.floor(settings.timeLimitMinutes / 60)}h${settings.timeLimitMinutes % 60 > 0 ? ` ${settings.timeLimitMinutes % 60}min` : ''}`
+                    : `${settings.timeLimitMinutes} min`}
+                </Typography>
+              </div>
+            )}
           </CardContent>
         </Card>
 

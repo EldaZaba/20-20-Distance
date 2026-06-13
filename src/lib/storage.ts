@@ -1,6 +1,7 @@
 export type Settings = {
   intervalMinutes: number;
   soundEnabled: boolean;
+  timeLimitMinutes: number;
 };
 
 export type DailyStats = {
@@ -21,7 +22,8 @@ const STATS_KEY = '2020.stats';
 
 const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 20,
-  soundEnabled: true
+  soundEnabled: true,
+  timeLimitMinutes: 0
 };
 
 const DEFAULT_STATS: Stats = {

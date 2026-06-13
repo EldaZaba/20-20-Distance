@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Chip, LinearProgress } from '@mui/material';
+import { Button, Chip, LinearProgress, TextField } from '@mui/material';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -43,10 +43,13 @@ const OverlayTimer = () => {
   const [secondsLeft, setSecondsLeft] = useState(OVERLAY_SECONDS);
   const [motionDetected, setMotionDetected] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'active' | 'denied'>('idle');
+  const [customInterval, setCustomInterval] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const motionIntervalRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioStopTimeoutRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
+  const limitFiredRef = useRef(false);
 
   const progress = useMemo(() => (secondsLeft / OVERLAY_SECONDS) * 100, [secondsLeft]);
   const countdownLabel = formatCountdown(remainingSeconds);
@@ -205,6 +208,30 @@ const OverlayTimer = () => {
     }
   }, []);
 
+  const showLimitNotification = useCallback(async () => {
+    try {
+      let permissionGranted = await isPermissionGranted();
+      if (!permissionGranted) {
+        const permission = await requestPermission();
+        permissionGranted = permission === 'granted';
+      }
+      if (permissionGranted) {
+        sendNotification({ title: 'PC Time Limit', body: 'Vypršel tvůj časový limit na PC.' });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleLimitReached = useCallback(async () => {
+    const { soundEnabled } = loadSettings();
+    if (soundEnabled) {
+      const played = await playCustomSound();
+      if (!played) playTone();
+    }
+    await showLimitNotification();
+  }, [playCustomSound, showLimitNotification]);
+
   const handleTimerElapsed = useCallback(async () => {
     const { soundEnabled } = loadSettings();
     if (soundEnabled) {
@@ -294,6 +321,27 @@ const OverlayTimer = () => {
     };
   }, [handleTimerElapsed]);
 
+  // Reset elapsed + fired state whenever the limit changes so the new limit is applied fresh
+  useEffect(() => {
+    elapsedRef.current = 0;
+    limitFiredRef.current = false;
+  }, [settings.timeLimitMinutes]);
+
+  useEffect(() => {
+    if (!settings.timeLimitMinutes || settings.timeLimitMinutes <= 0) return;
+    if (timerPaused) return;
+
+    const id = window.setInterval(() => {
+      elapsedRef.current += 1;
+      if (!limitFiredRef.current && elapsedRef.current >= settings.timeLimitMinutes * 60) {
+        limitFiredRef.current = true;
+        void handleLimitReached();
+      }
+    }, 1000);
+
+    return () => window.clearInterval(id);
+  }, [settings.timeLimitMinutes, timerPaused, handleLimitReached]);
+
   useEffect(() => {
     if (!active) return;
 
@@ -325,13 +373,42 @@ const OverlayTimer = () => {
                 variant={minutes === settings.intervalMinutes ? 'contained' : 'outlined'}
                 color="primary"
                 size="small"
-                onClick={() => void setIntervalMinutes(minutes)}
+                onClick={() => { setCustomInterval(''); void setIntervalMinutes(minutes); }}
               >
                 {minutes} min
               </Button>
             ))}
           </div>
-          <div className="mt-3 text-xs text-white/50">
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <TextField
+              size="small"
+              type="number"
+              placeholder="Custom min"
+              value={customInterval}
+              onChange={(e) => setCustomInterval(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = parseInt(customInterval, 10);
+                  if (!isNaN(v) && v >= 1) { void setIntervalMinutes(v); setCustomInterval(''); }
+                }
+              }}
+              inputProps={{ min: 1, max: 480 }}
+              sx={{ width: 130 }}
+              InputProps={{ style: { color: 'white' } }}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              onClick={() => {
+                const v = parseInt(customInterval, 10);
+                if (!isNaN(v) && v >= 1) { void setIntervalMinutes(v); setCustomInterval(''); }
+              }}
+            >
+              Set
+            </Button>
+          </div>
+          <div className="mt-2 text-xs text-white/50">
             Current interval: {settings.intervalMinutes} min
           </div>
           <div className="mt-2 text-xs text-white/40">Time left: {countdownLabel}</div>
