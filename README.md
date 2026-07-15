@@ -11,11 +11,10 @@ The app runs in the system tray, shows a fullscreen break overlay, tracks progre
 
 - Tray-first workflow (runs in background)
 - Configurable reminder interval (`1, 10, 20, 30, 45, 60` minutes)
-- Fullscreen 20-second overlay break
+- Notification 20-second break
 - Desktop notifications
 - Optional sound reminders
 - Custom `alert.wav` support from `sounds/`
-- Basic motion detection status from webcam during overlay
 - Daily stats (`streak`, `points`, `sessions`)
 - Auto-start enabled on desktop
 
